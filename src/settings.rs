@@ -20,6 +20,7 @@ impl Default for Settings {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn config_dir() -> PathBuf {
     let mut p = match std::env::var_os("HOME") {
         Some(h) => PathBuf::from(h),
@@ -27,6 +28,16 @@ fn config_dir() -> PathBuf {
     };
     p.push("Library");
     p.push("Application Support");
+    p.push("MADO");
+    p
+}
+
+#[cfg(target_os = "windows")]
+fn config_dir() -> PathBuf {
+    let mut p = match std::env::var_os("APPDATA") {
+        Some(h) => PathBuf::from(h),
+        None => PathBuf::from("."),
+    };
     p.push("MADO");
     p
 }

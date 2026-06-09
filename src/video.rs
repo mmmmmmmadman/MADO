@@ -199,6 +199,10 @@ fn decode_loop(
     let mut frame_id: u64 = 1;
     let mut wall_start = Instant::now();
     let mut first_pts: Option<f64> = None;
+    // 第一格畫面是否已寫出。未寫出前忽略 pause，確保暫停狀態下按 ← 重開
+    // 仍會立即顯示第一格（否則 decoder 初始化較慢，pause 旗標會搶先生效，
+    // 第一格要等再次播放才出現）。
+    let mut presented = false;
 
     // ── 主迴圈 ──
     let mut packets_iter = input.packets();
@@ -206,7 +210,7 @@ fn decode_loop(
         if stop.load(Ordering::Relaxed) {
             break;
         }
-        if pause.load(Ordering::Relaxed) {
+        if presented && pause.load(Ordering::Relaxed) {
             // 暫停期間補償 wall_clock，恢復時不衝刺
             let pause_started = Instant::now();
             while !stop.load(Ordering::Relaxed) && pause.load(Ordering::Relaxed) {
@@ -252,6 +256,8 @@ fn decode_loop(
                     width,
                     height,
                 );
+                // 第一格寫出後（frame_id 由 1 起跳，寫出一格即變 2）pause 才生效
+                presented = frame_id > 1;
                 // pacing: 視訊解碼完依 pts 對齊 wall clock
                 if let Some(pts) = shared_pts(&shared_frame) {
                     if first_pts.is_none() {
@@ -267,9 +273,13 @@ fn decode_loop(
                 }
             }
         } else if Some(idx) == audio_idx {
-            if let Some(a_dec) = a_dec_opt.as_mut() {
-                if a_dec.send_packet(&packet).is_ok() {
-                    drain_audio(a_dec, &mut resampler, &audio_ring);
+            // 第一格畫面顯示前不推音訊，避免暫停狀態下按 ← 預載第一格時
+            // 冒出一小段聲音。
+            if presented {
+                if let Some(a_dec) = a_dec_opt.as_mut() {
+                    if a_dec.send_packet(&packet).is_ok() {
+                        drain_audio(a_dec, &mut resampler, &audio_ring);
+                    }
                 }
             }
         }

@@ -317,9 +317,12 @@ int rtaudio_get_device_info(RtAudioHandle handle, unsigned int device_id, CDevic
         info->input_channels = device_info.inputChannels;
         info->is_default = device_info.isDefaultOutput ? 1 : 0;
 
-        // Get first supported sample rate
-        if (!device_info.sampleRates.empty()) {
-            info->sample_rate = device_info.sampleRates[0];
+        // Prefer the device's preferred sample rate; fall back to the
+        // highest supported rate, then 48000 if none are reported.
+        if (device_info.preferredSampleRate != 0) {
+            info->sample_rate = device_info.preferredSampleRate;
+        } else if (!device_info.sampleRates.empty()) {
+            info->sample_rate = device_info.sampleRates.back();
         } else {
             info->sample_rate = 48000;
         }

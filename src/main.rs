@@ -49,10 +49,106 @@ Window\n\
   Double-click the picture to toggle fullscreen.\n\
   Drag the bottom-right corner to resize.\n\
 \n\
-Keyboard (Video mode)\n\
-  Space   Pause / resume\n\
-  ←       Restart the current clip from the beginning\n\
+Keyboard\n\
+  ↓       Blackout — fill the window black (camera / video keep running)\n\
+  ↑       Restore the live picture\n\
+  Space   Pause / resume (Video mode)\n\
+  ←       Return to the start, keeping the current play / pause state (Video mode)\n\
 ";
+
+/// MADO 全域深色主題（在 app 啟動時設定一次）。
+///
+/// 根因：app 原本用 egui 預設淺色 `Visuals`，只在個別面板 closure 用
+/// `ui.style_mut()` 改 `fg_stroke`。ComboBox 下拉 popup 畫在獨立的
+/// Foreground layer，吃的是 ctx 全域 visuals → 維持白底；Slider 滑軌 /
+/// DragValue / 捲軸的 `extreme_bg_color` / `bg_fill` / `weak_bg_fill`
+/// 也來自全域 visuals → 白底。治本：以 `Visuals::dark()` 為基底，
+/// 覆寫成 MADO 配色語言（深色背景 18,18,22 系、亮灰 gray230、珊瑚粉
+/// 0xFF6C47），所有 widget（含 popup）一律深色。
+fn install_visuals(ctx: &egui::Context) {
+    const PANEL: egui::Color32 = egui::Color32::from_rgb(18, 18, 22);
+    const ELEVATED: egui::Color32 = egui::Color32::from_rgb(28, 28, 34);
+    const EXTREME: egui::Color32 = egui::Color32::from_rgb(10, 10, 14);
+    const HAIRLINE: egui::Color32 = egui::Color32::from_gray(60);
+    const FG_INACTIVE: egui::Color32 = egui::Color32::from_gray(230);
+    const FG_DIM: egui::Color32 = egui::Color32::from_gray(160);
+    const CORAL: egui::Color32 = egui::Color32::from_rgb(0xFF, 0x6C, 0x47);
+
+    let mut visuals = egui::Visuals::dark();
+
+    // ── 視窗 / 面板 / popup 背景（ComboBox popup 用 window_fill）──
+    visuals.window_fill = PANEL;
+    visuals.panel_fill = PANEL;
+    visuals.window_stroke = egui::Stroke::new(1.0, HAIRLINE);
+    // Slider 滑軌 / DragValue 數值框 / TextEdit 背景（治 Slider 白底）
+    visuals.extreme_bg_color = EXTREME;
+    visuals.faint_bg_color = ELEVATED;
+    visuals.code_bg_color = EXTREME;
+    // 選取高亮（popup 選中項 / 文字選取）用珊瑚粉低透明
+    visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(0xFF, 0x6C, 0x47, 70);
+    visuals.selection.stroke = egui::Stroke::new(1.0, CORAL);
+    visuals.hyperlink_color = CORAL;
+    visuals.warn_fg_color = CORAL;
+    // 視窗陰影壓低（borderless overlay 上不需強陰影）
+    visuals.popup_shadow = egui::epaint::Shadow {
+        offset: [0, 2],
+        blur: 8,
+        spread: 0,
+        color: egui::Color32::from_black_alpha(96),
+    };
+    visuals.window_shadow = visuals.popup_shadow;
+
+    // ── 各 widget 狀態：底框深色（絕不白底）、文字亮灰 / hover-active 珊瑚粉 ──
+    let w = &mut visuals.widgets;
+
+    // noninteractive：label / heading / separator
+    w.noninteractive.bg_fill = PANEL;
+    w.noninteractive.weak_bg_fill = PANEL;
+    w.noninteractive.bg_stroke = egui::Stroke::new(1.0, HAIRLINE); // separator 線
+    w.noninteractive.fg_stroke = egui::Stroke::new(1.0, FG_INACTIVE);
+
+    // inactive：未 hover 的 button / combobox 收合態 / slider 軌
+    w.inactive.bg_fill = ELEVATED;
+    w.inactive.weak_bg_fill = ELEVATED;
+    w.inactive.bg_stroke = egui::Stroke::new(1.0, HAIRLINE);
+    w.inactive.fg_stroke = egui::Stroke::new(1.0, FG_INACTIVE);
+
+    // hovered：滑入回饋（底框稍亮深色、文字珊瑚粉）
+    w.hovered.bg_fill = egui::Color32::from_rgb(40, 40, 48);
+    w.hovered.weak_bg_fill = egui::Color32::from_rgb(40, 40, 48);
+    w.hovered.bg_stroke = egui::Stroke::new(1.0, CORAL);
+    w.hovered.fg_stroke = egui::Stroke::new(1.5, CORAL);
+
+    // active：按下 / 開啟態
+    w.active.bg_fill = egui::Color32::from_rgb(48, 48, 56);
+    w.active.weak_bg_fill = egui::Color32::from_rgb(48, 48, 56);
+    w.active.bg_stroke = egui::Stroke::new(1.0, CORAL);
+    w.active.fg_stroke = egui::Stroke::new(1.5, CORAL);
+
+    // open：ComboBox 展開時的收合鈕底框（popup 開著時）
+    w.open.bg_fill = ELEVATED;
+    w.open.weak_bg_fill = ELEVATED;
+    w.open.bg_stroke = egui::Stroke::new(1.0, CORAL);
+    w.open.fg_stroke = egui::Stroke::new(1.0, FG_INACTIVE);
+
+    // disabled 文字（egui 另以 fade 降透明；給可辨灰）
+    visuals.widgets.noninteractive.fg_stroke.color = FG_INACTIVE;
+    // window_fill 已設；確保 widget 圓角與 egui dark 一致即可
+    let _ = FG_DIM; // 保留語義常數（waiting hint 等其他處仍用 from_gray）
+
+    // eframe 預設 theme_preference = System：系統 theme 變化時 egui 會用硬編碼
+    // Visuals::dark()/light() 覆蓋 set_visuals（這正是 ComboBox popup / Slider 仍白底、
+    // selection 仍預設藍的原因）。改設 Dark（停止跟隨系統）並把自訂 visuals 放進
+    // dark_style，eframe 套用 theme 時就用我們的版本，不再被覆蓋。
+    let mut style = (*ctx.style()).clone();
+    style.visuals = visuals;
+    let style_arc = std::sync::Arc::new(style);
+    ctx.options_mut(|opt| {
+        opt.theme_preference = egui::ThemePreference::Dark;
+        opt.dark_style = style_arc.clone();
+    });
+    ctx.set_style(style_arc);
+}
 
 fn install_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
@@ -160,18 +256,22 @@ struct MadoApp {
     mode: Mode,
     playlist: Playlist,
     show_playlist: bool,
+    /// playlist 剛由工具列按鈕開啟的那一幀，跳過「點外部關閉」判定，
+    /// 避免開啟同幀的 pointer press（落在工具列）立即關閉面板。
+    playlist_just_opened: bool,
     paused: bool,
+    /// 黑屏顯示開關（Down = 全黑、Up = 恢復）。背景 pipeline 不停，僅控制繪製。
+    blackout: bool,
 
     settings: Settings,
     audio_devices: Vec<audio::AudioDevice>,
     show_settings: bool,
-    pending_settings: Settings,
-    settings_save_status: Option<String>,
 }
 
 impl MadoApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         install_fonts(&cc.egui_ctx);
+        install_visuals(&cc.egui_ctx);
         let cameras = camera::list_cameras().unwrap_or_default();
         let selected_idx = 0;
         let selected_unique_id = cameras
@@ -202,12 +302,12 @@ impl MadoApp {
             mode: Mode::Camera,
             playlist: Playlist::default(),
             show_playlist: false,
+            playlist_just_opened: false,
             paused: false,
+            blackout: false,
             settings: Settings::load(),
             audio_devices: audio::list_output_devices(),
             show_settings: false,
-            pending_settings: Settings::load(),
-            settings_save_status: None,
         };
         app.restart_service();
         app
@@ -356,8 +456,24 @@ impl MadoApp {
         }
     }
 
-    /// 鍵盤：Video 模式下 Space = pause/resume、← = restart 當前影片。
+    /// 鍵盤：Down = 黑屏、Up = 恢復（任何模式皆可，背景 pipeline 不停）。
+    /// Video 模式下另有 Space = pause/resume、← = restart 當前影片。
     fn handle_keys(&mut self, ctx: &egui::Context) {
+        // 黑屏切換獨立於模式之外，且必須在 early return 之前處理，
+        // 否則黑屏（camera 模式時）按 Up 將無法解除。
+        let (down, up) = ctx.input(|i| {
+            (
+                i.key_pressed(egui::Key::ArrowDown),
+                i.key_pressed(egui::Key::ArrowUp),
+            )
+        });
+        if down {
+            self.blackout = true;
+        }
+        if up {
+            self.blackout = false;
+        }
+
         if self.mode != Mode::Video {
             return;
         }
@@ -374,8 +490,18 @@ impl MadoApp {
             }
         }
         if left {
-            // 從頭播：respawn service（清掉 paused / eof）
+            // 回到開頭，但保留當前 play/pause 狀態：
+            // 播放中 → 回頭續播；暫停中 → 回頭仍暫停（不強制播放）。
+            // VideoPlayer 無 seek，回頭靠 respawn；restart_service 一律以
+            // paused=false 起始，故 respawn 後再還原原本的暫停狀態。
+            let was_paused = self.paused;
             self.restart_service();
+            if was_paused {
+                self.paused = true;
+                if let Some(vp) = &self.video_player {
+                    vp.set_paused(true);
+                }
+            }
         }
     }
 
@@ -533,6 +659,23 @@ impl eframe::App for MadoApp {
                     // 既有 "waiting for camera…" 已處理
                 }
             });
+
+        // 5. 黑屏覆蓋：蓋住 texture / overlay / settings 所有層。
+        //    背景 pipeline 不停（相機/影片/音訊照跑），僅是顯示開關。
+        //    用最頂層 Area + 整個 screen_rect 填純黑，Up 後立即接回即時畫面。
+        if self.blackout {
+            let screen = ctx.screen_rect();
+            egui::Area::new(egui::Id::new("mado_blackout"))
+                .fixed_pos(screen.min)
+                .order(egui::Order::Foreground)
+                .show(ctx, |ui| {
+                    ui.painter().rect_filled(
+                        screen,
+                        egui::CornerRadius::ZERO,
+                        egui::Color32::BLACK,
+                    );
+                });
+        }
     }
 
     fn on_exit(&mut self) {
@@ -576,6 +719,8 @@ impl MadoApp {
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
                     ui.add_space(12.0);
+                    // 字體大小為 per-panel 排版設定（非配色）；配色（fg_stroke /
+                    // 底框）一律走全域深色主題 install_visuals，不在此重設。
                     let style = ui.style_mut();
                     style.text_styles.insert(
                         egui::TextStyle::Button,
@@ -585,10 +730,17 @@ impl MadoApp {
                         egui::TextStyle::Body,
                         egui::FontId::new(16.0, egui::FontFamily::Proportional),
                     );
-                    style.visuals.widgets.inactive.fg_stroke.color =
-                        egui::Color32::from_gray(230);
-                    style.visuals.widgets.hovered.fg_stroke.color =
-                        egui::Color32::from_rgb(0xFF, 0x6C, 0x47);
+                    // 工具列文字強制白色（半透明黑條上最清楚，且不依賴全域主題）；
+                    // hover 與選中項走珊瑚粉。selectable 選中態文字仍取 inactive 白色，
+                    // 背景取 selection.bg_fill 珊瑚粉，故「Video」= 白字珊瑚底（非藍）。
+                    let coral = egui::Color32::from_rgb(0xFF, 0x6C, 0x47);
+                    style.visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::WHITE;
+                    style.visuals.widgets.inactive.fg_stroke.color = egui::Color32::WHITE;
+                    style.visuals.widgets.hovered.fg_stroke.color = coral;
+                    style.visuals.widgets.active.fg_stroke.color = coral;
+                    style.visuals.selection.bg_fill =
+                        egui::Color32::from_rgba_unmultiplied(0xFF, 0x6C, 0x47, 70);
+                    style.visuals.selection.stroke = egui::Stroke::new(1.0, coral);
 
                     // ── 齒輪：進入設定 ──
                     if ui
@@ -597,9 +749,6 @@ impl MadoApp {
                     {
                         self.show_settings = !self.show_settings;
                         if self.show_settings {
-                            // 開啟時帶入目前 settings 為編輯草稿
-                            self.pending_settings = self.settings.clone();
-                            self.settings_save_status = None;
                             // 重新整理 device 清單
                             self.audio_devices =
                                 audio::list_output_devices();
@@ -633,7 +782,10 @@ impl MadoApp {
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
                             ui.add_space(12.0);
-                            if ui.button("Close").clicked() {
+                            // 與其他工具列項一致用 selectable_label（非 Button），
+                            // 確保未 hover 時走相同 inactive.fg_stroke(gray230) 對比，
+                            // hover 時走 hovered.fg_stroke 珊瑚粉。
+                            if ui.selectable_label(false, "Close").clicked() {
                                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                             }
                             ui.add_space(8.0);
@@ -660,6 +812,11 @@ impl MadoApp {
                                     .clicked()
                                 {
                                     self.show_playlist = !self.show_playlist;
+                                    if self.show_playlist {
+                                        // 開啟當幀跳過「點外部關閉」判定（避免本幀
+                                        // 落在工具列的 press 立即關閉）。
+                                        self.playlist_just_opened = true;
+                                    }
                                 }
                             }
                             // Loop 三態鈕（等寬，三態無 glyph）
@@ -738,14 +895,21 @@ impl MadoApp {
             .fixed_pos(rect.min)
             .order(egui::Order::Middle)
             .interactable(true);
-        area_bg.show(ctx, |ui| {
-            ui.painter().rect_filled(
-                rect,
-                egui::CornerRadius::ZERO,
-                egui::Color32::from_black_alpha(180),
-            );
-            ui.interact(rect, ui.id().with("mado_settings_block"), egui::Sense::click());
-        });
+        let bg_clicked = area_bg
+            .show(ctx, |ui| {
+                ui.painter().rect_filled(
+                    rect,
+                    egui::CornerRadius::ZERO,
+                    egui::Color32::from_black_alpha(180),
+                );
+                ui.interact(
+                    rect,
+                    ui.id().with("mado_settings_block"),
+                    egui::Sense::click(),
+                )
+                .clicked()
+            })
+            .inner;
 
         // 中央 modal
         let panel_w = (rect.width() * 0.8).clamp(420.0, 640.0);
@@ -786,24 +950,13 @@ impl MadoApp {
                         egui::TextStyle::Button,
                         egui::FontId::new(16.0, egui::FontFamily::Proportional),
                     );
-                    style.visuals.widgets.inactive.fg_stroke.color =
-                        egui::Color32::from_gray(230);
-                    style.visuals.widgets.hovered.fg_stroke.color =
-                        egui::Color32::from_rgb(0xFF, 0x6C, 0x47);
+                    // 配色（fg_stroke / 底框 / popup / slider 軌）一律走全域
+                    // 深色主題 install_visuals，不在此重設。
 
                     ui.add_space(16.0);
                     ui.horizontal(|ui| {
                         ui.add_space(20.0);
                         ui.heading("Settings");
-                        ui.with_layout(
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            |ui| {
-                                ui.add_space(20.0);
-                                if ui.button("Close").clicked() {
-                                    self.show_settings = false;
-                                }
-                            },
-                        );
                     });
                     ui.add_space(8.0);
                     ui.separator();
@@ -813,21 +966,7 @@ impl MadoApp {
                         .show(ui, |ui| {
                             ui.add_space(12.0);
 
-                            // ── Manual ──
-                            ui.horizontal(|ui| {
-                                ui.add_space(20.0);
-                                ui.label(egui::RichText::new("Manual").strong());
-                            });
-                            ui.horizontal(|ui| {
-                                ui.add_space(20.0);
-                                ui.label(MANUAL_TEXT);
-                            });
-
-                            ui.add_space(16.0);
-                            ui.separator();
-                            ui.add_space(12.0);
-
-                            // ── Audio Output Device ──
+                            // ── Audio Output Device（即時套用 + 自動存檔）──
                             ui.horizontal(|ui| {
                                 ui.add_space(20.0);
                                 ui.label(egui::RichText::new("Audio Output Device").strong());
@@ -836,7 +975,7 @@ impl MadoApp {
                             ui.horizontal(|ui| {
                                 ui.add_space(20.0);
                                 let current_label = self
-                                    .pending_settings
+                                    .settings
                                     .audio_device_name
                                     .clone()
                                     .unwrap_or_else(|| "System Default".to_string());
@@ -847,7 +986,7 @@ impl MadoApp {
                                     .show_ui(ui, |ui| {
                                         if ui
                                             .selectable_label(
-                                                self.pending_settings.audio_device_name.is_none(),
+                                                self.settings.audio_device_name.is_none(),
                                                 "System Default",
                                             )
                                             .clicked()
@@ -856,7 +995,7 @@ impl MadoApp {
                                         }
                                         for d in &self.audio_devices {
                                             let sel = self
-                                                .pending_settings
+                                                .settings
                                                 .audio_device_name
                                                 .as_deref()
                                                 == Some(d.name.as_str());
@@ -869,13 +1008,23 @@ impl MadoApp {
                                         }
                                     });
                                 if let Some(v) = new_choice {
-                                    self.pending_settings.audio_device_name = v;
+                                    if v != self.settings.audio_device_name {
+                                        self.settings.audio_device_name = v;
+                                        // 立即存檔
+                                        if let Err(e) = self.settings.save() {
+                                            eprintln!("[mado] settings save failed: {}", e);
+                                        }
+                                        // 切換裝置需重開 audio output（僅 Video 模式有 stream）
+                                        if self.mode == Mode::Video {
+                                            self.restart_service();
+                                        }
+                                    }
                                 }
                             });
 
                             ui.add_space(12.0);
 
-                            // ── Volume ──
+                            // ── Volume（即時 set_volume + 放開存檔）──
                             ui.horizontal(|ui| {
                                 ui.add_space(20.0);
                                 ui.label(egui::RichText::new("Volume").strong());
@@ -883,16 +1032,24 @@ impl MadoApp {
                             ui.add_space(4.0);
                             ui.horizontal(|ui| {
                                 ui.add_space(20.0);
-                                let mut v = self.pending_settings.volume;
-                                if ui
-                                    .add(
-                                        egui::Slider::new(&mut v, 0.0..=1.0)
-                                            .show_value(true)
-                                            .fixed_decimals(2),
-                                    )
-                                    .changed()
-                                {
-                                    self.pending_settings.volume = v;
+                                let mut v = self.settings.volume;
+                                let response = ui.add(
+                                    egui::Slider::new(&mut v, 0.0..=1.0)
+                                        .show_value(true)
+                                        .fixed_decimals(2),
+                                );
+                                if response.changed() {
+                                    self.settings.volume = v;
+                                    // 即時改音量（走 Mutex，不重開 stream）
+                                    if let Some(out) = &self.audio_output {
+                                        out.set_volume(v);
+                                    }
+                                }
+                                // 放開 / 失焦才存檔，避免每幀寫磁碟
+                                if response.drag_stopped() || response.lost_focus() {
+                                    if let Err(e) = self.settings.save() {
+                                        eprintln!("[mado] settings save failed: {}", e);
+                                    }
                                 }
                             });
 
@@ -900,41 +1057,33 @@ impl MadoApp {
                             ui.separator();
                             ui.add_space(12.0);
 
-                            // ── Save / Revert ──
+                            // ── Manual（操作說明）──
                             ui.horizontal(|ui| {
                                 ui.add_space(20.0);
-                                if ui.button("Save").clicked() {
-                                    match self.pending_settings.save() {
-                                        Ok(()) => {
-                                            self.settings = self.pending_settings.clone();
-                                            self.settings_save_status =
-                                                Some("Saved".to_string());
-                                            // 套用到目前播放（若正在播 video）
-                                            if self.mode == Mode::Video {
-                                                self.restart_service();
-                                            }
-                                        }
-                                        Err(e) => {
-                                            self.settings_save_status =
-                                                Some(format!("Error: {}", e));
-                                        }
-                                    }
-                                }
-                                ui.add_space(8.0);
-                                if ui.button("Revert").clicked() {
-                                    self.pending_settings = self.settings.clone();
-                                    self.settings_save_status = Some("Reverted".to_string());
-                                }
-                                if let Some(s) = &self.settings_save_status {
-                                    ui.add_space(12.0);
-                                    ui.label(s);
-                                }
+                                ui.label(egui::RichText::new("Manual").strong());
+                            });
+                            ui.horizontal(|ui| {
+                                ui.add_space(20.0);
+                                ui.label(MANUAL_TEXT);
                             });
                             ui.add_space(16.0);
                         });
                 },
             );
         });
+
+        // 點面板外部關閉：遮罩 block 被點到（panel 內 widget / ComboBox popup
+        // 會優先消費點擊，使遮罩不觸發 clicked），且指標確實落在 panel_rect 之外。
+        // 雙重條件（block.clicked + 幾何 hit-test）避免點面板內部誤關。
+        if bg_clicked {
+            let outside = ctx
+                .input(|i| i.pointer.interact_pos())
+                .map(|p| !panel_rect.contains(p))
+                .unwrap_or(true);
+            if outside {
+                self.show_settings = false;
+            }
+        }
     }
 
     fn draw_playlist_panel(&mut self, ctx: &egui::Context, rect: egui::Rect) {
@@ -966,10 +1115,25 @@ impl MadoApp {
                         egui::TextStyle::Body,
                         egui::FontId::new(16.0, egui::FontFamily::Proportional),
                     );
-                    style.visuals.widgets.inactive.fg_stroke.color =
-                        egui::Color32::from_gray(230);
-                    style.visuals.widgets.hovered.fg_stroke.color =
-                        egui::Color32::from_rgb(0xFF, 0x6C, 0x47);
+                    // 配色 fg_stroke（inactive 亮灰 / hover-active 珊瑚粉）走全域
+                    // 深色主題 install_visuals。此面板背景為半透明黑
+                    // from_black_alpha(190)（比 PANEL 更暗），button 用全域實心
+                    // ELEVATED 底會浮出方塊，破壞此處刻意的扁平風格。故此面板
+                    // 維持原扁平覆寫：inactive 透明（只顯示文字）、hover/active
+                    // 低透明深色回饋；描邊一律無（不要全域珊瑚粉描邊框）。
+                    style.visuals.widgets.inactive.weak_bg_fill =
+                        egui::Color32::TRANSPARENT;
+                    style.visuals.widgets.inactive.bg_fill =
+                        egui::Color32::TRANSPARENT;
+                    style.visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                    for w in [
+                        &mut style.visuals.widgets.hovered,
+                        &mut style.visuals.widgets.active,
+                    ] {
+                        w.weak_bg_fill = egui::Color32::from_black_alpha(140);
+                        w.bg_fill = egui::Color32::from_black_alpha(140);
+                        w.bg_stroke = egui::Stroke::NONE;
+                    }
 
                     ui.horizontal(|ui| {
                         ui.add_space(12.0);
@@ -1115,6 +1279,26 @@ impl MadoApp {
                 },
             );
         });
+
+        // 點面板外部關閉：本幀有 pointer press 且座標落在 panel_rect 之外。
+        // panel 內的 ▲▼ / Remove / per-clip flip / Clear All / 捲動，其 press
+        // 座標都在 panel_rect 內，幾何 hit-test 保護不誤關。
+        // 開啟當幀（playlist_just_opened）跳過判定，避免開啟同幀工具列 press 立即關閉。
+        if self.playlist_just_opened {
+            self.playlist_just_opened = false;
+        } else {
+            let pressed_outside = ctx.input(|i| {
+                i.pointer.any_pressed()
+                    && i
+                        .pointer
+                        .interact_pos()
+                        .map(|p| !panel_rect.contains(p))
+                        .unwrap_or(false)
+            });
+            if pressed_outside {
+                self.show_playlist = false;
+            }
+        }
     }
 }
 

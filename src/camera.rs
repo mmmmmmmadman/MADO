@@ -15,8 +15,12 @@ pub struct CameraInfo {
     pub unique_id: String,
 }
 
+#[cfg(target_os = "macos")]
 const SYSTEM_PROFILER_TIMEOUT: Duration = Duration::from_secs(5);
 
+// macOS：system_profiler 列舉；Windows：cv2 probe（camera_service.py --list_cameras）。
+// Linux 等其他平台無 run_with_timeout 呼叫者，cfg 排除避免 dead_code（對齊 VisionMod）。
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn run_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Result<Vec<u8>> {
     use wait_timeout::ChildExt;
     let mut child = Command::new(program)
@@ -89,7 +93,95 @@ pub fn list_cameras() -> Result<Vec<CameraInfo>> {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Windows：spawn `camera_service.py --list_cameras`，由同一 Python runtime
+/// 跑 `cv2.VideoCapture(i)` 實際 probe 0..N 確認可開性，並用 pygrabber 讀
+/// DirectShow FriendlyName，輸出 JSON
+/// `[{"index":0,"name":"ASUS FHD webcam","opened":true}, ...]`。列出的 index 即
+/// capture_loop `cv2.VideoCapture(index)` 真正會用的 index，dropdown 順序 =
+/// cv2 順序，永不錯位。name 取自 pygrabber（缺則 Python 端已 fallback
+/// `Camera {i}`）。比照 VisionMod core/src/camera/capture.rs::list_cameras_windows。
+///
+/// JSON 解析失敗 / Python 不可用 / 腳本缺失 → 走下方 fallback 回單台 `Camera 0`。
+#[cfg(target_os = "windows")]
+pub fn list_cameras() -> Result<Vec<CameraInfo>> {
+    fn fallback() -> Vec<CameraInfo> {
+        vec![CameraInfo {
+            index: 0,
+            name: "Camera 0".to_string(),
+            unique_id: String::new(),
+        }]
+    }
+
+    // Python cv2 probe timeout：cv2.VideoCapture open 每個失敗 index 可能要
+    // 1-2s（驅動內部 timeout），probe 上限算 30s 保險（對齊 VisionMod PYTHON_PROBE_TIMEOUT）。
+    const PYTHON_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
+
+    let py = match detect_python() {
+        Ok(p) => p,
+        Err(_) => return Ok(fallback()),
+    };
+    let script = resolve_script_path("camera_service.py");
+    if !script.exists() {
+        return Ok(fallback());
+    }
+    let py_str = py.to_string_lossy().to_string();
+    let script_str = script.to_string_lossy().to_string();
+    let stdout = match run_with_timeout(
+        &py_str,
+        &[&script_str, "--list_cameras"],
+        PYTHON_PROBE_TIMEOUT,
+    ) {
+        Ok(b) => b,
+        Err(_) => return Ok(fallback()),
+    };
+
+    let trimmed = match std::str::from_utf8(&stdout) {
+        Ok(s) => s.trim(),
+        Err(_) => return Ok(fallback()),
+    };
+    if trimmed.is_empty() {
+        return Ok(fallback());
+    }
+
+    let arr: Vec<serde_json::Value> = match serde_json::from_str(trimmed) {
+        Ok(v) => v,
+        Err(_) => return Ok(fallback()),
+    };
+    let cameras: Vec<CameraInfo> = arr
+        .iter()
+        .filter_map(|item| {
+            let idx = item.get("index").and_then(|v| v.as_u64())? as u32;
+            let opened = item.get("opened").and_then(|v| v.as_bool()).unwrap_or(false);
+            if !opened {
+                return None;
+            }
+            // name 來自 Python 端 pygrabber DirectShow FriendlyName（如
+            // "ASUS FHD webcam"）。JSON 缺 name 或為空字串才 fallback
+            // "Camera {index}"。開機識別仍用 index（非 name）。
+            let name = item
+                .get("name")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("Camera {}", idx));
+            Some(CameraInfo {
+                index: idx,
+                name,
+                unique_id: String::new(),
+            })
+        })
+        .collect();
+
+    if cameras.is_empty() {
+        Ok(fallback())
+    } else {
+        Ok(cameras)
+    }
+}
+
+/// Linux 等其他非 macOS / 非 Windows 平台：cv2.VideoCapture 走 index 0 預設裝置，
+/// 多裝置列舉待後續以平台原生 API 補（V4L2）。比照 VisionMod 同平台 fallback。
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn list_cameras() -> Result<Vec<CameraInfo>> {
     Ok(vec![CameraInfo {
         index: 0,
@@ -162,6 +254,12 @@ pub type SharedFrame = Arc<Mutex<FrameSlot>>;
 ///   5. CARGO_MANIFEST_DIR/.venv/bin/python（cargo run 開發期）
 ///   6. 系統 python3 fallback
 fn detect_python() -> Result<PathBuf> {
+    // 平台 venv interpreter 相對路徑：POSIX(macOS/Linux) = .venv/bin/python，
+    // Windows = .venv\Scripts\python.exe。比照 VisionMod
+    // capture.rs::resolve_python_interpreter / service.rs::detect_venv_python 的 cfg 分流。
+    #[cfg(target_os = "windows")]
+    let rel = ".venv/Scripts/python.exe";
+    #[cfg(not(target_os = "windows"))]
     let rel = ".venv/bin/python";
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
@@ -184,8 +282,15 @@ fn detect_python() -> Result<PathBuf> {
             return Ok(c.clone());
         }
     }
-    // 系統 python3 fallback（最後手段）
-    Ok(PathBuf::from("python3"))
+    // 系統 interpreter fallback（最後手段）：Windows 通常無 python3，用 python。
+    #[cfg(target_os = "windows")]
+    {
+        Ok(PathBuf::from("python"))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(PathBuf::from("python3"))
+    }
 }
 
 /// 解析 Python 腳本絕對路徑，比照 VisionMod service.rs::resolve_script_path。
@@ -231,7 +336,13 @@ pub fn spawn_camera_service(
     fps: u32,
 ) -> Result<Child> {
     let py = detect_python()?;
+    // 平台相機 service 腳本：macOS = AVFoundation（camera_service_mac.py），
+    // Windows = OpenCV cv2.VideoCapture（camera_service.py）。比照 VisionMod
+    // visual/sd.rs / service.rs 的 cfg 分平台 service 選擇。
+    #[cfg(target_os = "macos")]
     let script = resolve_script_path("camera_service_mac.py");
+    #[cfg(not(target_os = "macos"))]
+    let script = resolve_script_path("camera_service.py");
     if !script.exists() {
         return Err(anyhow!("script not found: {}", script.display()));
     }
@@ -251,9 +362,20 @@ pub fn spawn_camera_service(
         .arg(height.to_string())
         .arg("--fps")
         .arg(fps.to_string());
-    if !unique_id.is_empty() {
-        cmd.arg("--camera_unique_id").arg(unique_id);
-    } else {
+    // 裝置定位參數分平台（比照 VisionMod app/src/main.rs::role_camera_args）：
+    // macOS 優先 AVCaptureDevice.uniqueID（跨 session/reboot 穩定），空字串
+    // fallback index；Windows cv2 backend 無等價穩定識別 → 永遠用 index。
+    #[cfg(target_os = "macos")]
+    {
+        if !unique_id.is_empty() {
+            cmd.arg("--camera_unique_id").arg(unique_id);
+        } else {
+            cmd.arg("--camera_index").arg(fallback_index.to_string());
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = unique_id;
         cmd.arg("--camera_index").arg(fallback_index.to_string());
     }
     cmd.stdout(Stdio::null()).stderr(Stdio::inherit());
