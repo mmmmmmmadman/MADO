@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 內嵌 Python 直譯器需動態載入第三方 .so/.dylib（pyobjc / numpy 等）。
+         hardened runtime 下必須關閉 library validation 才能載入非同 Team 簽署的模組。 -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- Python / pyobjc 會產生可執行記憶體（ctypes 等）。 -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <!-- 相機：camera_service_mac.py 透過 AVFoundation 擷取（TCC 由 Info.plist usage 字串驅動）。 -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
+</dict>
+</plist>

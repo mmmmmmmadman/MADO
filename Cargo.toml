@@ -1,0 +1,47 @@
+[package]
+name = "mado"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mado"
+path = "src/main.rs"
+
+[dependencies]
+# 對齊 VisionMod core/app（eframe 0.31 + egui 0.31）
+eframe = { version = "0.31", default-features = false, features = ["default_fonts", "wgpu"] }
+egui = "0.31"
+egui-wgpu = "0.31"
+wgpu = "24"
+
+bytemuck = { version = "1", features = ["derive", "min_const_generics"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wait-timeout = "0.2"
+image = { version = "0.25", default-features = false }
+
+# 影片解碼（含 audio track）。對齊 Matrix AV Mapper src/video.rs / audio_rtaudio.rs。
+ffmpeg-next = "8"
+crossbeam-channel = "0.5"
+log = "0.4"
+env_logger = "0.11"
+
+# macOS 拖曳 + window level（永遠置頂）。對齊 VisionMod app 的 objc2 版本。
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.5.2"
+objc2-foundation = { version = "0.2.2", features = ["NSGeometry"] }
+objc2-app-kit = { version = "0.2.2", features = [
+    "NSEvent",
+    "NSWindow",
+    "NSResponder",
+    "NSApplication",
+] }
+
+[build-dependencies]
+cc = "1.0"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16

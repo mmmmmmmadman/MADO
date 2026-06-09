@@ -1,0 +1,23 @@
+# Rust build
+/target/
+**/*.rs.bk
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+
+# Artifacts
+*.dmg
+*.app
+
+# Local logs
+/tmp_logs/
