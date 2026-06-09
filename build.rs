@@ -5,6 +5,15 @@ fn main() {
 
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
 
+    // Embed Windows application icon into the exe (taskbar / explorer).
+    #[cfg(target_os = "windows")]
+    {
+        println!("cargo:rerun-if-changed=assets/icons/mado.ico");
+        let mut res = winresource::WindowsResource::new();
+        res.set_icon("assets/icons/mado.ico");
+        res.compile().unwrap();
+    }
+
     // Compile C++ wrapper
     let mut build = cc::Build::new();
     build

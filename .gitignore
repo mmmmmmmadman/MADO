@@ -24,3 +24,7 @@ __pycache__/
 
 # Run logs
 *.log
+
+# Windows installer build artifacts
+/dist/
+/installer_output/
