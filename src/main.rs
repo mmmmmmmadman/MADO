@@ -1,3 +1,7 @@
+// Release build：不開 console 子系統，避免啟動時彈出空白 terminal 視窗。
+// debug build 保留 console 以便看 [mado_audio] / log 輸出。
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 //! MADO：無邊框 USB camera 預覽。
 //!
 //! 複製自 VisionMod：

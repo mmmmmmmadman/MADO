@@ -379,6 +379,13 @@ pub fn spawn_camera_service(
         cmd.arg("--camera_index").arg(fallback_index.to_string());
     }
     cmd.stdout(Stdio::null()).stderr(Stdio::inherit());
+    // Windows：主程式為 windows_subsystem（無 console），spawn console 子程序
+    // （python.exe）預設會自配新 console 黑窗 → CREATE_NO_WINDOW(0x08000000) 抑制。
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
     let child = cmd.spawn().map_err(|e| anyhow!("spawn py: {}", e))?;
     Ok(child)
 }
