@@ -16,6 +16,7 @@ playlist (it never replaces existing items).
 
 Toolbar (hover the window to show)
   ⚙          Open the Settings panel
+  ●          Open the HUE wheel (the colour dot right of ⚙)
   Camera     Switch to live webcam source
   Video      Switch to playlist playback
   Loop Off   Play through, stop at end of list
@@ -28,6 +29,12 @@ Window
   Drag the toolbar (or the picture) to move the window.
   Double-click the picture to toggle fullscreen.
   Drag the bottom-right corner to resize.
+
+HUE wheel
+  Drag the outer ring to change the accent hue.
+  Drag up / down in the centre to change saturation.
+  Four presets below: Coral / Mint / Sky / Violet.
+  The choice is saved and restored on next launch.
 
 Keyboard
   ↓       Blackout — fill the window black (camera / video keep running)
@@ -57,6 +64,7 @@ JA  日本語
 
 ツールバー（ウィンドウにマウスを乗せると表示）
   ⚙          設定画面を開く
+  ●          HUE ホイールを開く（⚙ の右にあるカラードット）
   Camera     カメラのライブ映像に切り替え
   Video      プレイリスト再生に切り替え
   Loop Off   最後まで再生して停止
@@ -70,6 +78,12 @@ JA  日本語
   ツールバーまたは映像をドラッグすると、ウィンドウを移動できます。
   映像をダブルクリックでフルスクリーン切替。
   右下隅をドラッグでリサイズ。
+
+HUE ホイール
+  外周リングをドラッグして強調色の色相を変更。
+  中央を上下にドラッグして彩度を変更。
+  下部に 4 つのプリセット：Coral / Mint / Sky / Violet。
+  選択した色は保存され、次回起動時に復元されます。
 
 キーボード
   ↓       ブラックアウト — ウィンドウを黒で塗りつぶす
@@ -98,6 +112,7 @@ ZH  繁體中文
 
 工具列（滑鼠進入視窗才出現）
   ⚙          開啟設定畫面
+  ●          開啟 HUE 色相環（⚙ 右邊的圓形色點）
   Camera     切換到 webcam 即時影像
   Video      切換到播放清單影片
   Loop Off   播完整個清單就停止
@@ -110,6 +125,12 @@ ZH  繁體中文
   按住工具列或畫面拖曳可移動視窗。
   在畫面雙擊切換全螢幕。
   按住右下角拖曳調整大小。
+
+HUE 色相環
+  拖曳外環改變強調色的色相。
+  在中央區域上下拖曳改變飽和度。
+  下方有 4 個預設色：Coral / Mint / Sky / Violet。
+  選擇的顏色會自動儲存，下次開啟時保留。
 
 鍵盤
   ↓       全黑遮蓋 — 視窗填黑（camera / 影片繼續執行）

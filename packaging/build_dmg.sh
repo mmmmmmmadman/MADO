@@ -19,7 +19,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_NAME="MADO"
 BINARY_NAME="mado"
 BUNDLE_ID="com.madzine.mado"
-VERSION="0.2.0"
+VERSION="0.2.1"
 DEVELOPER_ID="Developer ID Application: Pohsun Chung (W89J6VDBML)"
 NOTARY_PROFILE="anyani-notary"
 
