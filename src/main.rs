@@ -20,12 +20,15 @@
 mod audio;
 mod audio_output;
 mod camera;
+mod hue_wheel;
 mod playlist;
 mod rtaudio_ffi;
 mod settings;
+mod theme;
 mod video;
 
 use eframe::egui;
+use theme::compute_accent_colors;
 use playlist::{is_video_file, LoopMode, Playlist};
 use settings::Settings;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,6 +43,7 @@ Drop multiple files at once — or one at a time — they all append to the play
 \n\
 Toolbar (hover the window to show)\n\
   ⚙          Open this Settings panel\n\
+  ●          Open the HUE wheel (the colour dot right of ⚙)\n\
   Camera     Switch to live webcam source\n\
   Video      Switch to playlist playback\n\
   Loop Off   Play through, stop at end of list\n\
@@ -52,6 +56,12 @@ Window\n\
   Drag the toolbar (or the picture) to move the window.\n\
   Double-click the picture to toggle fullscreen.\n\
   Drag the bottom-right corner to resize.\n\
+\n\
+HUE wheel\n\
+  Drag the outer ring to change the accent hue.\n\
+  Drag up / down in the centre to change saturation.\n\
+  Four presets below: Coral / Mint / Sky / Violet.\n\
+  The choice is saved and restored on next launch.\n\
 \n\
 Keyboard\n\
   ↓       Blackout — fill the window black (camera / video keep running)\n\
@@ -66,6 +76,7 @@ const MANUAL_JA: &str = "\
 \n\
 ツールバー（ウィンドウにマウスを乗せると表示）\n\
   ⚙          設定画面を開く\n\
+  ●          HUE ホイールを開く（⚙ の右にあるカラードット）\n\
   Camera     カメラのライブ映像に切り替え\n\
   Video      プレイリスト再生に切り替え\n\
   Loop Off   最後まで再生して停止\n\
@@ -78,6 +89,12 @@ const MANUAL_JA: &str = "\
   ツールバーまたは映像をドラッグすると、ウィンドウを移動できます。\n\
   映像をダブルクリックでフルスクリーン切替。\n\
   右下隅をドラッグでリサイズ。\n\
+\n\
+HUE ホイール\n\
+  外周リングをドラッグして強調色の色相を変更。\n\
+  中央を上下にドラッグして彩度を変更。\n\
+  下部に 4 つのプリセット：Coral / Mint / Sky / Violet。\n\
+  選択した色は保存され、次回起動時に復元されます。\n\
 \n\
 キーボード\n\
   ↓       ブラックアウト — ウィンドウを黒で塗りつぶす（カメラ / 動画は継続）\n\
@@ -92,6 +109,7 @@ const MANUAL_ZH: &str = "\
 \n\
 工具列（滑鼠進入視窗才出現）\n\
   ⚙          開啟此設定畫面\n\
+  ●          開啟 HUE 色相環（⚙ 右邊的圓形色點）\n\
   Camera     切換到 webcam 即時影像\n\
   Video      切換到播放清單影片\n\
   Loop Off   播完整個清單就停止\n\
@@ -104,6 +122,12 @@ const MANUAL_ZH: &str = "\
   按住工具列或畫面拖曳可移動視窗。\n\
   在畫面雙擊切換全螢幕。\n\
   按住右下角拖曳調整大小。\n\
+\n\
+HUE 色相環\n\
+  拖曳外環改變強調色的色相。\n\
+  在中央區域上下拖曳改變飽和度。\n\
+  下方有 4 個預設色：Coral / Mint / Sky / Violet。\n\
+  選擇的顏色會自動儲存，下次開啟時保留。\n\
 \n\
 鍵盤\n\
   ↓       全黑遮蓋 — 視窗填黑（camera / 影片繼續執行）\n\
@@ -136,7 +160,13 @@ fn install_visuals(ctx: &egui::Context) {
     const HAIRLINE: egui::Color32 = egui::Color32::from_gray(60);
     const FG_INACTIVE: egui::Color32 = egui::Color32::from_gray(230);
     const FG_DIM: egui::Color32 = egui::Color32::from_gray(160);
-    const CORAL: egui::Color32 = egui::Color32::from_rgb(0xFF, 0x6C, 0x47);
+    // accent 初始基線由 HUE 系統的預設 hue/saturation 推導（per-frame apply_accent
+    // 會即時覆寫成使用者調整後的 HUE）；不再寫死珊瑚粉。
+    let coral = compute_accent_colors(
+        theme::DEFAULT_ACCENT_HUE,
+        theme::DEFAULT_ACCENT_SATURATION,
+    )
+    .accent;
 
     let mut visuals = egui::Visuals::dark();
 
@@ -149,10 +179,15 @@ fn install_visuals(ctx: &egui::Context) {
     visuals.faint_bg_color = ELEVATED;
     visuals.code_bg_color = EXTREME;
     // 選取高亮（popup 選中項 / 文字選取）用珊瑚粉低透明
-    visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(0xFF, 0x6C, 0x47, 70);
-    visuals.selection.stroke = egui::Stroke::new(1.0, CORAL);
-    visuals.hyperlink_color = CORAL;
-    visuals.warn_fg_color = CORAL;
+    visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(
+        coral.r(),
+        coral.g(),
+        coral.b(),
+        70,
+    );
+    visuals.selection.stroke = egui::Stroke::new(1.0, coral);
+    visuals.hyperlink_color = coral;
+    visuals.warn_fg_color = coral;
     // 視窗陰影壓低（borderless overlay 上不需強陰影）
     visuals.popup_shadow = egui::epaint::Shadow {
         offset: [0, 2],
@@ -180,19 +215,19 @@ fn install_visuals(ctx: &egui::Context) {
     // hovered：滑入回饋（底框稍亮深色、文字珊瑚粉）
     w.hovered.bg_fill = egui::Color32::from_rgb(40, 40, 48);
     w.hovered.weak_bg_fill = egui::Color32::from_rgb(40, 40, 48);
-    w.hovered.bg_stroke = egui::Stroke::new(1.0, CORAL);
-    w.hovered.fg_stroke = egui::Stroke::new(1.5, CORAL);
+    w.hovered.bg_stroke = egui::Stroke::new(1.0, coral);
+    w.hovered.fg_stroke = egui::Stroke::new(1.5, coral);
 
     // active：按下 / 開啟態
     w.active.bg_fill = egui::Color32::from_rgb(48, 48, 56);
     w.active.weak_bg_fill = egui::Color32::from_rgb(48, 48, 56);
-    w.active.bg_stroke = egui::Stroke::new(1.0, CORAL);
-    w.active.fg_stroke = egui::Stroke::new(1.5, CORAL);
+    w.active.bg_stroke = egui::Stroke::new(1.0, coral);
+    w.active.fg_stroke = egui::Stroke::new(1.5, coral);
 
     // open：ComboBox 展開時的收合鈕底框（popup 開著時）
     w.open.bg_fill = ELEVATED;
     w.open.weak_bg_fill = ELEVATED;
-    w.open.bg_stroke = egui::Stroke::new(1.0, CORAL);
+    w.open.bg_stroke = egui::Stroke::new(1.0, coral);
     w.open.fg_stroke = egui::Stroke::new(1.0, FG_INACTIVE);
 
     // disabled 文字（egui 另以 fade 降透明；給可辨灰）
@@ -212,6 +247,29 @@ fn install_visuals(ctx: &egui::Context) {
         opt.dark_style = style_arc.clone();
     });
     ctx.set_style(style_arc);
+}
+
+/// 每幀把 HUE 色相環 accent 套回全域 visuals（selection / hover / active /
+/// warn / hyperlink），使 HUE 圈即時驅動整個 app 而非只有工具列。
+fn apply_accent(ctx: &egui::Context, hue: f32, sat: f32) {
+    let accent = compute_accent_colors(hue, sat).accent;
+    let accent_sel = egui::Color32::from_rgba_unmultiplied(
+        accent.r(),
+        accent.g(),
+        accent.b(),
+        70,
+    );
+    let mut style = (*ctx.style()).clone();
+    style.visuals.selection.bg_fill = accent_sel;
+    style.visuals.selection.stroke = egui::Stroke::new(1.0, accent);
+    style.visuals.hyperlink_color = accent;
+    style.visuals.warn_fg_color = accent;
+    style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, accent);
+    style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, accent);
+    style.visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, accent);
+    style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.5, accent);
+    style.visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0, accent);
+    ctx.set_style(style);
 }
 
 fn install_fonts(ctx: &egui::Context) {
@@ -330,6 +388,12 @@ struct MadoApp {
     settings: Settings,
     audio_devices: Vec<audio::AudioDevice>,
     show_settings: bool,
+
+    /// HUE 色相環 accent（移植自 VisionMod；珊瑚粉 hue=12/360 預設）
+    accent_hue: f32,
+    accent_saturation: f32,
+    accent_palette_idx: u8,
+    hue_wheel: hue_wheel::HueWheelState,
 }
 
 impl MadoApp {
@@ -372,6 +436,10 @@ impl MadoApp {
             settings: Settings::load(),
             audio_devices: audio::list_output_devices(),
             show_settings: false,
+            accent_hue: theme::load_hue(),
+            accent_saturation: theme::load_saturation(),
+            accent_palette_idx: 0,
+            hue_wheel: Default::default(),
         };
         app.restart_service();
         app
@@ -636,6 +704,8 @@ impl MadoApp {
 impl eframe::App for MadoApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        // HUE 色相環即時驅動全域 accent（selection / hover / active / warn）。
+        apply_accent(ctx, self.accent_hue, self.accent_saturation);
         self.handle_dropped_files(ctx);
         self.handle_keys(ctx);
         self.poll_video_eof();
@@ -679,8 +749,8 @@ impl eframe::App for MadoApp {
                     ui.id().with("mado_resize_se"),
                     egui::Sense::drag(),
                 );
-                // 視覺：resize handle 小三角
-                {
+                // 視覺：resize handle 小三角（顯示條件與 overlay 控制列一致）
+                if self.hover_active || self.show_settings {
                     let p = ui.painter();
                     let c = egui::Color32::from_white_alpha(if self.hover_active { 120 } else { 40 });
                     let r = resize_rect;
@@ -740,6 +810,17 @@ impl eframe::App for MadoApp {
                     );
                 });
         }
+
+        // 6. HUE 色相環 popup（state.show 控制，與 hover 無關；overlay 之後繪製）。
+        let accent = compute_accent_colors(self.accent_hue, self.accent_saturation).accent;
+        hue_wheel::draw(
+            ctx,
+            &mut self.accent_hue,
+            &mut self.accent_saturation,
+            &mut self.accent_palette_idx,
+            &mut self.hue_wheel,
+            accent,
+        );
     }
 
     fn on_exit(&mut self) {
@@ -797,14 +878,21 @@ impl MadoApp {
                     // 工具列文字強制白色（半透明黑條上最清楚，且不依賴全域主題）；
                     // hover 與選中項走珊瑚粉。selectable 選中態文字仍取 inactive 白色，
                     // 背景取 selection.bg_fill 珊瑚粉，故「Video」= 白字珊瑚底（非藍）。
-                    let coral = egui::Color32::from_rgb(0xFF, 0x6C, 0x47);
+                    // accent 由 HUE 色相環即時推導（取代寫死珊瑚粉）。
+                    let accent =
+                        compute_accent_colors(self.accent_hue, self.accent_saturation).accent;
+                    let accent_sel = egui::Color32::from_rgba_unmultiplied(
+                        accent.r(),
+                        accent.g(),
+                        accent.b(),
+                        70,
+                    );
                     style.visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::WHITE;
                     style.visuals.widgets.inactive.fg_stroke.color = egui::Color32::WHITE;
-                    style.visuals.widgets.hovered.fg_stroke.color = coral;
-                    style.visuals.widgets.active.fg_stroke.color = coral;
-                    style.visuals.selection.bg_fill =
-                        egui::Color32::from_rgba_unmultiplied(0xFF, 0x6C, 0x47, 70);
-                    style.visuals.selection.stroke = egui::Stroke::new(1.0, coral);
+                    style.visuals.widgets.hovered.fg_stroke.color = accent;
+                    style.visuals.widgets.active.fg_stroke.color = accent;
+                    style.visuals.selection.bg_fill = accent_sel;
+                    style.visuals.selection.stroke = egui::Stroke::new(1.0, accent);
 
                     // ── 齒輪：進入設定 ──
                     if ui
@@ -818,6 +906,10 @@ impl MadoApp {
                                 audio::list_output_devices();
                         }
                     }
+                    ui.add_space(8.0);
+
+                    // ── HUE 色相環 toggle（齒輪右側）──
+                    hue_wheel::toggle_button(ui, accent, &mut self.hue_wheel);
                     ui.add_space(8.0);
 
                     // ── Source 切換（Camera ↔ Video）──
@@ -978,8 +1070,17 @@ impl MadoApp {
         // 中央 modal
         let panel_w = (rect.width() * 0.8).clamp(420.0, 640.0);
         let panel_h = (rect.height() * 0.85).clamp(360.0, 560.0);
-        let panel_rect = egui::Rect::from_center_size(
-            rect.center(),
+        // 上排 overlay 工具列高 56px（draw_overlay bar_h），加 8px 間距 = 64px 避讓。
+        // panel 頂部不得高於工具列下緣，否則「Settings」標題被工具列遮住。
+        const TOOLBAR_AVOID: f32 = 56.0 + 8.0;
+        let panel_left = rect.center().x - panel_w / 2.0;
+        let panel_top =
+            (rect.center().y - panel_h / 2.0).max(rect.min.y + TOOLBAR_AVOID);
+        // 下移避開工具列後，panel 高度須收進剩餘空間，底部留 2px；
+        // 內容超出時靠既有 ScrollArea 捲動。
+        let panel_h = panel_h.min(rect.max.y - 2.0 - panel_top).max(0.0);
+        let panel_rect = egui::Rect::from_min_size(
+            egui::pos2(panel_left, panel_top),
             egui::vec2(panel_w, panel_h),
         );
         let area = egui::Area::new(egui::Id::new("mado_settings_panel"))
@@ -997,10 +1098,25 @@ impl MadoApp {
                 egui::Stroke::new(1.0, egui::Color32::from_gray(60)),
                 egui::epaint::StrokeKind::Outside,
             );
-            ui.allocate_ui_with_layout(
-                egui::vec2(panel_w, panel_h),
-                egui::Layout::top_down(egui::Align::Min),
+            // 重點：egui Area 不 clip，且 allocate_ui_with_layout 的 desired_size
+            // 只是排版提示，不限制子 widget 高度。若不顯式把 ui 的 max_rect 釘在
+            // panel_rect 內，內部 ScrollArea（auto_shrink false）會拿 Area 的近乎
+            // 無限 available_height，於是永遠不捲動、內容直接畫出 panel_rect 之外
+            // （超出視窗底）。故改用 UiBuilder 把 max_rect 限制成 panel_rect，並
+            // 設 clip rect；ScrollArea 才會以 panel_h 為界、超出走捲動。
+            // 內容區底部內縮 16px：與頂部 add_space(16) 對稱，讓捲動內容尾端
+            // 不貼齊 panel 底邊（panel 底部保留可見留白）。max_rect 與 clip_rect
+            // 都用此內縮 rect，ScrollArea 才會以此為界、超出走捲動。
+            let content_rect = egui::Rect::from_min_max(
+                panel_rect.min,
+                egui::pos2(panel_rect.max.x, panel_rect.max.y - 16.0),
+            );
+            ui.allocate_new_ui(
+                egui::UiBuilder::new()
+                    .max_rect(content_rect)
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
                 |ui| {
+                    ui.set_clip_rect(content_rect);
                     let style = ui.style_mut();
                     style.text_styles.insert(
                         egui::TextStyle::Heading,
