@@ -1,6 +1,6 @@
 ================================================================
 MADO — Operation Manual / 操作說明書 / 取扱説明書
-Version 0.2.0
+Version 0.2.1
 Copyright (C) 2026 MADZINE (Pohsun Chung). All rights reserved.
 https://github.com/mmmmmmmadman/MADO
 ================================================================
