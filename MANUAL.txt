@@ -1,0 +1,130 @@
+================================================================
+MADO — Operation Manual / 操作說明書 / 取扱説明書
+Version 0.2.0
+Copyright (C) 2026 MADZINE (Pohsun Chung). All rights reserved.
+https://github.com/mmmmmmmadman/MADO
+================================================================
+
+
+================================================================
+EN  English
+================================================================
+
+Drag and drop video files onto the window to load them into the playlist.
+Drop multiple files at once — or one at a time — they all append to the
+playlist (it never replaces existing items).
+
+Toolbar (hover the window to show)
+  ⚙          Open the Settings panel
+  Camera     Switch to live webcam source
+  Video      Switch to playlist playback
+  Loop Off   Play through, stop at end of list
+  Loop One   Repeat current video
+  Loop All   Repeat the whole playlist
+  Playlist   Open the playlist drawer (reorder / remove / per-clip flip)
+  ↔  ↕       Flip horizontally / vertically (per-clip in Video mode)
+
+Window
+  Drag the toolbar (or the picture) to move the window.
+  Double-click the picture to toggle fullscreen.
+  Drag the bottom-right corner to resize.
+
+Keyboard
+  ↓       Blackout — fill the window black (camera / video keep running)
+  ↑       Restore the live picture
+  Space   Pause / resume (Video mode)
+  ←       Return to the start, keeping the current play / pause state
+          (Video mode)
+
+Settings panel
+  Manual               This text — switchable EN / 日本語 / 繁中
+  Audio Output Device  Pick the device that video audio plays through
+                       (RtAudio enumerates every CoreAudio output device,
+                        including External Headphones / HDMI etc.)
+  Volume               0.0 to 1.0
+  All changes persist to
+    ~/Library/Application Support/MADO/settings.json   (macOS)
+    %APPDATA%\MADO\settings.json                       (Windows)
+
+
+================================================================
+JA  日本語
+================================================================
+
+動画ファイルをウィンドウにドラッグ＆ドロップすると、プレイリストに
+読み込まれます。複数同時でも、一つずつでも、ドロップした分はすべて
+プレイリストに追加されます（既存項目を置き換えることはありません）。
+
+ツールバー（ウィンドウにマウスを乗せると表示）
+  ⚙          設定画面を開く
+  Camera     カメラのライブ映像に切り替え
+  Video      プレイリスト再生に切り替え
+  Loop Off   最後まで再生して停止
+  Loop One   現在の動画をリピート
+  Loop All   プレイリスト全体をリピート
+  Playlist   プレイリスト一覧を開く
+             （並び替え / 削除 / クリップ毎の反転）
+  ↔  ↕       水平 / 垂直反転（Video モードではクリップ単位）
+
+ウィンドウ
+  ツールバーまたは映像をドラッグすると、ウィンドウを移動できます。
+  映像をダブルクリックでフルスクリーン切替。
+  右下隅をドラッグでリサイズ。
+
+キーボード
+  ↓       ブラックアウト — ウィンドウを黒で塗りつぶす
+          （カメラ / 動画は継続）
+  ↑       映像を元に戻す
+  Space   一時停止 / 再開（Video モード）
+  ←       現在の再生 / 一時停止状態のまま先頭に戻る（Video モード）
+
+設定画面
+  Manual               本テキスト — EN / 日本語 / 繁中 切替可
+  Audio Output Device  動画音声の出力先デバイスを選択
+                       （RtAudio がすべての CoreAudio 出力デバイスを
+                        列挙、External Headphones / HDMI 等を含む）
+  Volume               0.0 〜 1.0
+  すべての変更は以下に保存されます
+    ~/Library/Application Support/MADO/settings.json   (macOS)
+    %APPDATA%\MADO\settings.json                       (Windows)
+
+
+================================================================
+ZH  繁體中文
+================================================================
+
+拖曳影片檔到視窗即可載入播放清單。一次拖多檔、或一支一支拖都會
+「累加」到清單，不會取代既有項目。
+
+工具列（滑鼠進入視窗才出現）
+  ⚙          開啟設定畫面
+  Camera     切換到 webcam 即時影像
+  Video      切換到播放清單影片
+  Loop Off   播完整個清單就停止
+  Loop One   單曲循環
+  Loop All   循環整個播放清單
+  Playlist   展開播放清單面板（排序 / 移除 / 每支獨立翻轉）
+  ↔  ↕       左右 / 上下翻轉（Video 模式為每支獨立設定）
+
+視窗
+  按住工具列或畫面拖曳可移動視窗。
+  在畫面雙擊切換全螢幕。
+  按住右下角拖曳調整大小。
+
+鍵盤
+  ↓       全黑遮蓋 — 視窗填黑（camera / 影片繼續執行）
+  ↑       恢復顯示原本影像
+  Space   暫停 / 繼續（Video 模式）
+  ←       回到開頭，保留目前播放 / 暫停狀態（Video 模式）
+
+設定畫面
+  Manual               本說明書 — 可切換 EN / 日本語 / 繁中
+  Audio Output Device  選擇影片聲音輸出的裝置
+                       （RtAudio 列舉所有 CoreAudio 輸出裝置，
+                        包括 External Headphones / HDMI 等）
+  Volume               0.0 至 1.0
+  所有變更會存到
+    ~/Library/Application Support/MADO/settings.json   (macOS)
+    %APPDATA%\MADO\settings.json                       (Windows)
+
+================================================================
