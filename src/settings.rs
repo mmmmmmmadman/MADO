@@ -3,12 +3,42 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Lang {
+    En,
+    Ja,
+    Zh,
+}
+
+impl Default for Lang {
+    fn default() -> Self {
+        Lang::En
+    }
+}
+
+impl Lang {
+    pub fn label(self) -> &'static str {
+        match self {
+            Lang::En => "EN",
+            Lang::Ja => "日本語",
+            Lang::Zh => "繁中",
+        }
+    }
+}
+
+fn default_lang() -> Lang {
+    Lang::En
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     /// 音訊輸出裝置（CoreAudio UID，None = 系統預設）
     pub audio_device_name: Option<String>,
     /// 音量 0.0 ~ 1.0
     pub volume: f32,
+    /// 說明書語言（舊 settings.json 缺欄走 default = En，向下相容）
+    #[serde(default = "default_lang")]
+    pub manual_lang: Lang,
 }
 
 impl Default for Settings {
@@ -16,6 +46,7 @@ impl Default for Settings {
         Self {
             audio_device_name: None,
             volume: 0.8,
+            manual_lang: Lang::En,
         }
     }
 }

@@ -30,7 +30,7 @@ use std::sync::Arc;
 const DEFAULT_W: f32 = 960.0;
 const DEFAULT_H: f32 = 540.0;
 
-const MANUAL_TEXT: &str = "\
+const MANUAL_EN: &str = "\
 Drag and drop video files onto the window to load them into the playlist.\n\
 Drop multiple files at once — or one at a time — they all append to the playlist.\n\
 \n\
@@ -55,6 +55,66 @@ Keyboard\n\
   Space   Pause / resume (Video mode)\n\
   ←       Return to the start, keeping the current play / pause state (Video mode)\n\
 ";
+
+const MANUAL_JA: &str = "\
+動画ファイルをウィンドウにドラッグ＆ドロップすると、プレイリストに読み込まれます。\n\
+複数同時でも、一つずつでも、ドロップした分はすべてプレイリストに追加されます（置き換えではありません）。\n\
+\n\
+ツールバー（ウィンドウにマウスを乗せると表示）\n\
+  ⚙          設定画面を開く\n\
+  Camera     カメラのライブ映像に切り替え\n\
+  Video      プレイリスト再生に切り替え\n\
+  Loop Off   最後まで再生して停止\n\
+  Loop One   現在の動画をリピート\n\
+  Loop All   プレイリスト全体をリピート\n\
+  Playlist   プレイリスト一覧を開く（並び替え / 削除 / クリップ毎の反転）\n\
+  ↔  ↕       水平 / 垂直反転（Video モードではクリップ単位）\n\
+\n\
+ウィンドウ\n\
+  ツールバーまたは映像をドラッグすると、ウィンドウを移動できます。\n\
+  映像をダブルクリックでフルスクリーン切替。\n\
+  右下隅をドラッグでリサイズ。\n\
+\n\
+キーボード\n\
+  ↓       ブラックアウト — ウィンドウを黒で塗りつぶす（カメラ / 動画は継続）\n\
+  ↑       映像を元に戻す\n\
+  Space   一時停止 / 再開（Video モード）\n\
+  ←       現在の再生 / 一時停止状態のまま先頭に戻る（Video モード）\n\
+";
+
+const MANUAL_ZH: &str = "\
+拖曳影片檔到視窗即可載入播放清單。\n\
+一次拖多檔、或一支一支拖都會「累加」到清單，不會取代既有項目。\n\
+\n\
+工具列（滑鼠進入視窗才出現）\n\
+  ⚙          開啟此設定畫面\n\
+  Camera     切換到 webcam 即時影像\n\
+  Video      切換到播放清單影片\n\
+  Loop Off   播完整個清單就停止\n\
+  Loop One   單曲循環\n\
+  Loop All   循環整個播放清單\n\
+  Playlist   展開播放清單面板（排序 / 移除 / 每支獨立翻轉）\n\
+  ↔  ↕       左右 / 上下翻轉（Video 模式為每支獨立設定）\n\
+\n\
+視窗\n\
+  按住工具列或畫面拖曳可移動視窗。\n\
+  在畫面雙擊切換全螢幕。\n\
+  按住右下角拖曳調整大小。\n\
+\n\
+鍵盤\n\
+  ↓       全黑遮蓋 — 視窗填黑（camera / 影片繼續執行）\n\
+  ↑       恢復顯示原本影像\n\
+  Space   暫停 / 繼續（Video 模式）\n\
+  ←       回到開頭，保留目前播放 / 暫停狀態（Video 模式）\n\
+";
+
+fn manual_text(lang: settings::Lang) -> &'static str {
+    match lang {
+        settings::Lang::En => MANUAL_EN,
+        settings::Lang::Ja => MANUAL_JA,
+        settings::Lang::Zh => MANUAL_ZH,
+    }
+}
 
 /// MADO 全域深色主題（在 app 啟動時設定一次）。
 ///
@@ -1057,14 +1117,40 @@ impl MadoApp {
                             ui.separator();
                             ui.add_space(12.0);
 
-                            // ── Manual（操作說明）──
+                            // ── Manual（操作說明，三語切換；變更即存）──
                             ui.horizontal(|ui| {
                                 ui.add_space(20.0);
                                 ui.label(egui::RichText::new("Manual").strong());
+                                ui.add_space(16.0);
+                                let mut pick: Option<settings::Lang> = None;
+                                for &lang in &[
+                                    settings::Lang::En,
+                                    settings::Lang::Ja,
+                                    settings::Lang::Zh,
+                                ] {
+                                    let sel = self.settings.manual_lang == lang;
+                                    if ui.selectable_label(sel, lang.label()).clicked() {
+                                        pick = Some(lang);
+                                    }
+                                }
+                                if let Some(lang) = pick {
+                                    if lang != self.settings.manual_lang {
+                                        self.settings.manual_lang = lang;
+                                        if let Err(e) = self.settings.save() {
+                                            log::warn!("[settings] save manual_lang: {}", e);
+                                        }
+                                    }
+                                }
                             });
-                            ui.horizontal(|ui| {
-                                ui.add_space(20.0);
-                                ui.label(MANUAL_TEXT);
+                            ui.add_space(4.0);
+                            // 用 indent + Label.wrap()：horizontal 內 label 被當 single-line
+                            // 不換行，日文/中文無空格 → 整行溢出畫面。indent 走 vertical
+                            // default，label 自動 wrap 到 available_width。
+                            ui.indent("mado_manual_indent", |ui| {
+                                ui.add(
+                                    egui::Label::new(manual_text(self.settings.manual_lang))
+                                        .wrap(),
+                                );
                             });
                             ui.add_space(16.0);
                         });
