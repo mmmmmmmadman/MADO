@@ -12,7 +12,7 @@
 ;    ISCC = C:\Users\mmmmm\AppData\Local\Programs\Inno Setup 6\ISCC.exe
 
 #define MyAppName "MADO"
-#define MyAppVersion "0.2.0"
+#define MyAppVersion "0.2.1"
 #define MyAppExe "mado.exe"
 #define DistVenv "dist\.venv"
 
